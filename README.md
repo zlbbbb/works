@@ -3,13 +3,13 @@ forecast
 
 ## 可复用月度预测脚本
 
-脚本路径：`/home/runner/work/works/works/monthly_forecast.py`
+脚本路径：`monthly_forecast.py`
 
 ### 运行示例
 
 ```bash
-python /home/runner/work/works/works/monthly_forecast.py \
-  --excel /home/runner/work/works/works/2020-2024月度表.xlsx
+python monthly_forecast.py \
+  --excel 2020-2024月度表.xlsx
 ```
 
 ### 作为函数复用
