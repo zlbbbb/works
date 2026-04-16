@@ -257,7 +257,6 @@ def main() -> None:
     parser.add_argument("--alpha", type=float, default=1.0, help="DRO等价Ridge正则系数")
     args = parser.parse_args()
 
-    sheet: str | int
     sheet = int(args.sheet) if str(args.sheet).isdigit() else args.sheet
 
     pred_out, forecast_metrics, backtest_df, backtest_metrics, model = forecast_pipeline(
