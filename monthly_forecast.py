@@ -249,7 +249,7 @@ def forecast_pipeline(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="GM(1,1)+DRO(月度售电量)可复用预测脚本")
-    parser.add_argument("--excel", required=True, help="Excel文件绝对路径")
+    parser.add_argument("--excel", required=True, help="Excel文件路径（支持相对或绝对路径）")
     parser.add_argument("--sheet", default=0, help="工作表名称或序号")
     parser.add_argument("--train-end", default="2023-12-01")
     parser.add_argument("--pred-start", default="2024-01-01")
