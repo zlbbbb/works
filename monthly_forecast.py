@@ -166,8 +166,10 @@ def evaluate_prediction(actual: Iterable[float], predicted: Iterable[float]) -> 
     y_true = np.asarray(list(actual), dtype=float)
     y_pred = np.asarray(list(predicted), dtype=float)
     err = y_pred - y_true
+    safe_true = np.where(np.abs(y_true) < 1e-12, np.nan, y_true)
+    mape = float(np.nanmean(np.abs(err / safe_true)) * 100)
     return {
-        "MAPE": float(np.mean(np.abs(err / y_true)) * 100),
+        "MAPE": mape,
         "RMSE": float(np.sqrt(np.mean(err**2))),
         "MAE": float(np.mean(np.abs(err))),
     }
@@ -208,7 +210,8 @@ def rolling_one_step_backtest(
 
     out = pd.DataFrame(rows)
     out["error"] = out["predicted"] - out["actual"]
-    out["APE%"] = np.abs(out["error"] / out["actual"] * 100)
+    safe_actual = out["actual"].where(np.abs(out["actual"]) >= 1e-12, np.nan)
+    out["APE%"] = np.abs(out["error"] / safe_actual * 100)
     return out
 
 
@@ -235,7 +238,8 @@ def forecast_pipeline(
     pred_out = predict_gm11_dro(model, train_df["value"], pred_df["date"])
     pred_out = pred_out.merge(pred_df.rename(columns={"value": "actual"}), on="date", how="left")
     pred_out["error"] = pred_out["predicted"] - pred_out["actual"]
-    pred_out["APE%"] = np.abs(pred_out["error"] / pred_out["actual"] * 100)
+    safe_actual = pred_out["actual"].where(np.abs(pred_out["actual"]) >= 1e-12, np.nan)
+    pred_out["APE%"] = np.abs(pred_out["error"] / safe_actual * 100)
 
     forecast_metrics = evaluate_prediction(pred_out["actual"], pred_out["predicted"])
     backtest_df = rolling_one_step_backtest(data["date"], data["value"], alpha=alpha)
