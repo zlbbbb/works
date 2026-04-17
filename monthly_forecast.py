@@ -186,7 +186,7 @@ def evaluate_prediction(actual: Iterable[float], predicted: Iterable[float]) -> 
 def rolling_one_step_backtest(
     dates: Sequence[pd.Timestamp],
     values: Sequence[float],
-    min_train_size: int = 24,
+    min_train_size: int = 1,
     alpha: float = 1.0,
 ) -> pd.DataFrame:
     d_arr = pd.to_datetime(dates)
@@ -194,8 +194,17 @@ def rolling_one_step_backtest(
     if len(y_arr) <= min_train_size:
         raise ValueError("数据长度不足，无法执行回测")
 
-    rows = []
-    for i in range(min_train_size, len(y_arr)):
+    rows = [
+        {
+            "date": d_arr[0],
+            "actual": y_arr[0],
+            "predicted": np.nan,
+            "trend_T": np.nan,
+            "season_S": np.nan,
+            "irregular_I": np.nan,
+        }
+    ]
+    for i in range(max(min_train_size, 1), len(y_arr)):
         train_dates = d_arr[:i]
         train_values = y_arr[:i]
         model = fit_gm11_dro_model(train_dates, train_values, alpha=alpha)
@@ -252,7 +261,11 @@ def forecast_pipeline(
 
     forecast_metrics = evaluate_prediction(pred_out["actual"], pred_out["predicted"])
     backtest_df = rolling_one_step_backtest(data["date"], data["value"], alpha=alpha)
-    backtest_metrics = evaluate_prediction(backtest_df["actual"], backtest_df["predicted"])
+    valid_mask = backtest_df["actual"].notna() & backtest_df["predicted"].notna()
+    backtest_metrics = evaluate_prediction(
+        backtest_df.loc[valid_mask, "actual"],
+        backtest_df.loc[valid_mask, "predicted"],
+    )
     return pred_out, forecast_metrics, backtest_df, backtest_metrics, model
 
 
