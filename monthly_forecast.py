@@ -301,8 +301,9 @@ def main() -> None:
 
         printable = pred_out.copy()
         printable["date"] = printable["date"].dt.strftime("%Y-%m")
+        period_text = f"{pd.Timestamp(args.pred_start):%Y-%m}~{pd.Timestamp(args.pred_end):%Y-%m}"
         print(f"\n===== {section_name} =====")
-        print("2024预测区间结果:")
+        print(f"{period_text}预测区间结果:")
         print(printable.to_string(index=False, formatters={c: "{:.2f}".format for c in printable.columns if c != "date"}))
 
         backtest_printable = backtest_df.copy()
