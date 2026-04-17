@@ -273,6 +273,15 @@ def main() -> None:
     print("\n2024预测区间结果:")
     print(printable.to_string(index=False, formatters={c: "{:.2f}".format for c in printable.columns if c != "date"}))
 
+    backtest_printable = backtest_df.copy()
+    backtest_printable["date"] = backtest_printable["date"].dt.strftime("%Y-%m")
+    print("\n历史数据滚动回测结果:")
+    print(
+        backtest_printable.to_string(
+            index=False, formatters={c: "{:.2f}".format for c in backtest_printable.columns if c != "date"}
+        )
+    )
+
     print("\n预测区间指标:", {k: round(v, 2) for k, v in forecast_metrics.items()})
     print("历史滚动回测指标:", {k: round(v, 2) for k, v in backtest_metrics.items()})
     print("季节系数(1-12月):", np.round(model.seasonal_factors, 4).tolist())
