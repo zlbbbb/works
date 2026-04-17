@@ -24,14 +24,22 @@ def load_monthly_total_from_excel(
     excel_path: str,
     sheet_name: str | int | None = 0,
     date_col: int = 0,
+    value_cols: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     df = pd.read_excel(excel_path, sheet_name=sheet_name)
     if df.shape[1] < 2:
         raise ValueError("Excel表至少需要1列日期和1列数值")
 
     dates = df.iloc[:, date_col].map(parse_month_label)
-    numeric_cols = [c for i, c in enumerate(df.columns) if i != date_col]
-    values = df[numeric_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1)
+    if value_cols is None:
+        selected_cols = [c for i, c in enumerate(df.columns) if i != date_col]
+    else:
+        selected_cols = list(value_cols)
+        missing_cols = [c for c in selected_cols if c not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Excel中不存在指定列: {missing_cols}，可选列: {df.columns.tolist()}")
+
+    values = df[selected_cols].apply(pd.to_numeric, errors="coerce").sum(axis=1)
 
     out = pd.DataFrame({"date": dates, "value": values}).dropna().sort_values("date")
     out = out.reset_index(drop=True)
@@ -222,8 +230,9 @@ def forecast_pipeline(
     pred_end: str,
     alpha: float = 1.0,
     sheet_name: str | int | None = 0,
+    value_cols: Sequence[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, float], pd.DataFrame, dict[str, float], ForecastModel]:
-    data = load_monthly_total_from_excel(excel_path, sheet_name=sheet_name)
+    data = load_monthly_total_from_excel(excel_path, sheet_name=sheet_name, value_cols=value_cols)
     train_end_ts = pd.Timestamp(train_end)
     pred_start_ts = pd.Timestamp(pred_start)
     pred_end_ts = pd.Timestamp(pred_end)
@@ -255,36 +264,59 @@ def main() -> None:
     parser.add_argument("--pred-start", default="2024-01-01")
     parser.add_argument("--pred-end", default="2024-07-01")
     parser.add_argument("--alpha", type=float, default=1.0, help="DRO等价Ridge正则系数")
+    parser.add_argument(
+        "--categories",
+        default="总计,大工业,居民生活,农业生产,工商业",
+        help="要预测的类别，逗号分隔。支持“总计/全部/all/total”表示合计列求和",
+    )
     args = parser.parse_args()
 
     sheet = int(args.sheet) if str(args.sheet).isdigit() else args.sheet
+    raw_categories = [s.strip() for s in str(args.categories).split(",") if s.strip()]
+    categories: list[str] = []
+    seen = set()
+    for cat in raw_categories:
+        if cat not in seen:
+            categories.append(cat)
+            seen.add(cat)
+    if not categories:
+        categories = ["总计"]
 
-    pred_out, forecast_metrics, backtest_df, backtest_metrics, model = forecast_pipeline(
-        excel_path=args.excel,
-        train_end=args.train_end,
-        pred_start=args.pred_start,
-        pred_end=args.pred_end,
-        alpha=args.alpha,
-        sheet_name=sheet,
-    )
+    total_aliases = {"总计", "全部", "all", "total"}
+    for category in categories:
+        cat_norm = category.strip().lower()
+        is_total = category in {"总计", "全部"} or cat_norm in total_aliases
+        value_cols = None if is_total else [category]
+        section_name = "总用电量(合计)" if is_total else category
 
-    printable = pred_out.copy()
-    printable["date"] = printable["date"].dt.strftime("%Y-%m")
-    print("\n2024预测区间结果:")
-    print(printable.to_string(index=False, formatters={c: "{:.2f}".format for c in printable.columns if c != "date"}))
-
-    backtest_printable = backtest_df.copy()
-    backtest_printable["date"] = backtest_printable["date"].dt.strftime("%Y-%m")
-    print("\n历史数据滚动回测结果:")
-    print(
-        backtest_printable.to_string(
-            index=False, formatters={c: "{:.2f}".format for c in backtest_printable.columns if c != "date"}
+        pred_out, forecast_metrics, backtest_df, backtest_metrics, model = forecast_pipeline(
+            excel_path=args.excel,
+            train_end=args.train_end,
+            pred_start=args.pred_start,
+            pred_end=args.pred_end,
+            alpha=args.alpha,
+            sheet_name=sheet,
+            value_cols=value_cols,
         )
-    )
 
-    print("\n预测区间指标:", {k: round(v, 2) for k, v in forecast_metrics.items()})
-    print("历史滚动回测指标:", {k: round(v, 2) for k, v in backtest_metrics.items()})
-    print("季节系数(1-12月):", np.round(model.seasonal_factors, 4).tolist())
+        printable = pred_out.copy()
+        printable["date"] = printable["date"].dt.strftime("%Y-%m")
+        print(f"\n===== {section_name} =====")
+        print("2024预测区间结果:")
+        print(printable.to_string(index=False, formatters={c: "{:.2f}".format for c in printable.columns if c != "date"}))
+
+        backtest_printable = backtest_df.copy()
+        backtest_printable["date"] = backtest_printable["date"].dt.strftime("%Y-%m")
+        print("\n历史数据滚动回测结果:")
+        print(
+            backtest_printable.to_string(
+                index=False, formatters={c: "{:.2f}".format for c in backtest_printable.columns if c != "date"}
+            )
+        )
+
+        print("\n预测区间指标:", {k: round(v, 2) for k, v in forecast_metrics.items()})
+        print("历史滚动回测指标:", {k: round(v, 2) for k, v in backtest_metrics.items()})
+        print("季节系数(1-12月):", np.round(model.seasonal_factors, 4).tolist())
 
 
 if __name__ == "__main__":
